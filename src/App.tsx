@@ -4,6 +4,7 @@ import type { Schema } from "../amplify/data/resource";
 import { checkLoginAndGetName } from "./utils/AuthUtils";
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { generateClient } from "aws-amplify/data";
+import type { SelectionSet } from "aws-amplify/data";
 import "@aws-amplify/ui-react/styles.css";
 import { uploadData, remove } from "aws-amplify/storage";
 
@@ -69,6 +70,13 @@ import './FeaturePopup.css';
 const MAPBOX_TOKEN ="pk.eyJ1IjoicWlhb3hpbjEzNiIsImEiOiJjbGU1eXcyYTMwaHRyM29tc2dncjR6ZTBhIn0.8Wa3AEGbUSnau7PCEV3Stg" ;
 
 const client = generateClient<Schema>();
+
+const locationSelectionSet = [
+  'id', 'date', 'time', 'track', 'type', 'diameter',
+  'length', 'lat', 'lng', 'username', 'description',
+  'photos', 'joint', 'createdAt', 'updatedAt',
+] as const;
+type LocationItem = SelectionSet<Schema['Location']['type'], typeof locationSelectionSet>;
 
 
 const theme: Theme = {
@@ -146,7 +154,7 @@ function App() {
 
   const { signOut } = useAuthenticator();
   //const client = generateClient<Schema>();
-  const [location, setLocation] = useState<Array<Schema["Location"]["type"]>>([]);
+  const [location, setLocation] = useState<LocationItem[]>([]);
 
   // Build a GeoJSON FeatureCollection directly from Amplify location state.
   // This replaces the external API URL (AIR_PORTS) which was returning
@@ -261,11 +269,7 @@ function App() {
     // crashes with "Cannot read properties of null (reading 'id')" whenever
     // a record is updated and comments is null.
     const sub = client.models.Location.observeQuery({
-      selectionSet: [
-        'id', 'date', 'time', 'track', 'type', 'diameter',
-        'length', 'lat', 'lng', 'username', 'description',
-        'photos', 'joint', 'createdAt', 'updatedAt',
-      ] as const,
+      selectionSet: [...locationSelectionSet],
     }).subscribe({
       next: (data) => setLocation([...data.items]),
       error: (err) => console.error('observeQuery error:', err),
@@ -513,7 +517,7 @@ function App() {
     }
 
     // Find the point with the latest combined date+time on the same track
-    let latest: Schema["Location"]["type"] | null = null;
+    let latest: LocationItem | null = null;
     let latestDT = "";
     for (const loc of sameTrack) {
       const dt = (loc.date ?? "") + "T" + (loc.time ?? "");
