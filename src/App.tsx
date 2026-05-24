@@ -326,6 +326,14 @@ function App() {
 
 
   function createLocation() {
+    if (!date) {
+      alert("Please select a date before adding a new record.");
+      return;
+    }
+    if (!dateInfoList.some(item => item.date === date)) {
+      alert(`Date ${date} does not exist in the Date Info table. Please add it there first.`);
+      return;
+    }
     handleUserName();
     //console.log(typeof userName);
     //console.log("Username:", userName);
