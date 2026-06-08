@@ -352,6 +352,7 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!client.models.Valve) return;
     const sub = client.models.Valve.observeQuery({
       selectionSet: [...valveSelectionSet],
     }).subscribe({
@@ -657,100 +658,6 @@ function App() {
     setEditingDateId(null);
   }
 
-  async function handleTrackCal() {
-    const LAT_FT = 364000;
-    const sorted = [...trackInfoList].sort((a, b) => (a.track ?? 0) - (b.track ?? 0));
-    for (const trackRec of sorted) {
-      const pts = [...location.filter(l => l.track === trackRec.track)]
-        .sort((a, b) => {
-          const da = `${a.date ?? ""}T${a.time ?? ""}`;
-          const db = `${b.date ?? ""}T${b.time ?? ""}`;
-          return da.localeCompare(db);
-        });
-
-      if (trackRec.geometry === "point") {
-        const n = pts.length;
-        const value = trackRec.unitprice != null ? trackRec.unitprice * n : undefined;
-        client.models.Track.update({ id: trackRec.id, numpoint: n, quan: n, value });
-      } else if (trackRec.geometry === "line") {
-        const total = pts.reduce((s, p) => s + (p.length ?? 0), 0);
-        const rounded = Math.round(total * 100) / 100;
-        const value = trackRec.unitprice != null ? trackRec.unitprice * rounded : undefined;
-        client.models.Track.update({ id: trackRec.id, quan: rounded, value });
-      } else if (trackRec.geometry === "polygon") {
-        const n = pts.length;
-        if (n < 3) {
-          const value = trackRec.unitprice != null ? 0 : undefined;
-          client.models.Track.update({ id: trackRec.id, numpoint: n, ft2: 0, yd2: 0, quan: 0, value });
-          continue;
-        }
-        const midLat = pts.reduce((s, p) => s + (p.lat ?? 0), 0) / n;
-        const LNG_FT = LAT_FT * Math.cos((midLat * Math.PI) / 180);
-        let area = 0;
-        for (let i = 0; i < n; i++) {
-          const j = (i + 1) % n;
-          area += (pts[i].lng ?? 0) * LNG_FT * (pts[j].lat ?? 0) * LAT_FT
-                - (pts[j].lng ?? 0) * LNG_FT * (pts[i].lat ?? 0) * LAT_FT;
-        }
-        const sqFt = Math.round(Math.abs(area) / 2 * 100) / 100;
-        const sqYd = Math.round(sqFt / 9 * 100) / 100;
-        const value = trackRec.unitprice != null ? trackRec.unitprice * sqYd : undefined;
-        client.models.Track.update({ id: trackRec.id, numpoint: n, ft2: sqFt, yd2: sqYd, quan: sqYd, value });
-      }
-    }
-    setTab("4");
-
-    // Export polygon GeoJSON to S3 after all calculations are done
-    const polygonTracks = sorted.filter(t => t.geometry === "polygon");
-    const features = polygonTracks.map(trackRec => {
-      const pts = [...location.filter(l => l.track === trackRec.track)]
-        .sort((a, b) => {
-          const da = `${a.date ?? ""}T${a.time ?? ""}`;
-          const db = `${b.date ?? ""}T${b.time ?? ""}`;
-          return da.localeCompare(db);
-        });
-
-      const ring: [number, number][] = pts
-        .filter(p => p.lat != null && p.lng != null)
-        .map(p => [p.lng!, p.lat!]);
-
-      if (ring.length >= 3) ring.push(ring[0]);
-
-      const types = [...new Set(pts.map(p => p.type).filter(Boolean))].join(", ");
-
-      return {
-        type: "Feature" as const,
-        geometry: ring.length >= 4
-          ? { type: "Polygon" as const, coordinates: [ring] }
-          : { type: "MultiPoint" as const, coordinates: ring },
-        properties: {
-          track:         trackRec.track,
-          geometry:      trackRec.geometry,
-          ft2:           trackRec.ft2 ?? null,
-          yd2:           trackRec.yd2 ?? null,
-          unitprice:     trackRec.unitprice ?? null,
-          quan:          trackRec.quan ?? null,
-          value:         trackRec.value ?? null,
-          numpoint:      trackRec.numpoint ?? null,
-          trip:          trackRec.trip ?? null,
-          cost:          trackRec.cost ?? null,
-          location_type: types || null,
-        },
-      };
-    });
-
-    const geojson = { type: "FeatureCollection" as const, features };
-    try {
-      await uploadData({
-        path: "json/polygon.geojson",
-        data: JSON.stringify(geojson, null, 2),
-        options: { contentType: "application/geo+json" },
-      }).result;
-      console.log("polygon.geojson uploaded to S3 successfully.");
-    } catch (err) {
-      console.error("Failed to upload polygon.geojson to S3:", err);
-    }
-  }
 
   function createTrackInfo() {
     if (newTrack.track === "") { alert("Track number is required."); return; }
@@ -811,6 +718,84 @@ function App() {
     }
 
     setCalResult(haversineDistanceFt(lat, lng, latest.lat, latest.lng));
+  }
+
+  async function handleCompute() {
+    const LAT_FT = 364000;
+    const sorted = [...trackInfoList].sort((a, b) => (a.track ?? 0) - (b.track ?? 0));
+
+    // Pass 0: populate unitprice from trackData.ts by matching Location type → TRACK_DATA
+    for (const trackRec of sorted) {
+      const pts = location.filter(l => l.track === trackRec.track);
+      const firstType = pts.find(p => p.type)?.type;
+      if (firstType) {
+        const match = TRACK_DATA.find(r => r.type === firstType);
+        if (match?.unitprice != null) {
+          await client.models.Track.update({ id: trackRec.id, unitprice: match.unitprice });
+        }
+      }
+    }
+
+    // Pass 1: compute quantity (and ft2/yd2 for polygons)
+    for (const trackRec of sorted) {
+      const pts = location.filter(l => l.track === trackRec.track);
+
+      if (trackRec.geometry === 'line') {
+        const total = Math.round(pts.reduce((s, p) => s + (p.length ?? 0), 0) * 100) / 100;
+        await client.models.Track.update({ id: trackRec.id, quan: total });
+
+      } else if (trackRec.geometry === 'point') {
+        const n = pts.length;
+        await client.models.Track.update({ id: trackRec.id, quan: n, numpoint: n });
+
+      } else if (trackRec.geometry === 'polygon') {
+        const n = pts.length;
+        if (n < 3) {
+          await client.models.Track.update({ id: trackRec.id, numpoint: n, ft2: 0, yd2: 0, quan: 0 });
+          continue;
+        }
+        const midLat = pts.reduce((s, p) => s + (p.lat ?? 0), 0) / n;
+        const LNG_FT = LAT_FT * Math.cos((midLat * Math.PI) / 180);
+        let area = 0;
+        for (let i = 0; i < n; i++) {
+          const j = (i + 1) % n;
+          area += (pts[i].lng ?? 0) * LNG_FT * (pts[j].lat ?? 0) * LAT_FT
+                - (pts[j].lng ?? 0) * LNG_FT * (pts[i].lat ?? 0) * LAT_FT;
+        }
+        const sqFt = Math.round(Math.abs(area) / 2 * 100) / 100;
+        const sqYd = Math.round(sqFt / 9 * 100) / 100;
+        await client.models.Track.update({ id: trackRec.id, numpoint: n, ft2: sqFt, yd2: sqYd, quan: sqYd });
+      }
+    }
+
+    // Pass 2: compute value = unitprice * quantity
+    for (const trackRec of sorted) {
+      const { data: fresh } = await client.models.Track.get({ id: trackRec.id });
+      if (fresh && fresh.unitprice != null && fresh.quan != null) {
+        const value = Math.round(fresh.unitprice * fresh.quan * 100) / 100;
+        await client.models.Track.update({ id: trackRec.id, value });
+      }
+    }
+
+    // Pass 3: count Location records where joint <> "joint", grouped by joint value → save to Valve table (last step)
+    const nonJoint = location.filter(l => l.joint !== 'joint' && l.joint != null && l.joint !== '');
+    const typeCounts: Record<string, number> = {};
+    for (const loc of nonJoint) {
+      const t = loc.joint ?? 'Unknown';
+      typeCounts[t] = (typeCounts[t] ?? 0) + 1;
+    }
+    const { data: existingValves } = await client.models.Valve.list();
+    for (const [valveType, count] of Object.entries(typeCounts)) {
+      const existing = existingValves?.find(v => v.valve === valveType);
+      if (existing) {
+        await client.models.Valve.update({ id: existing.id, number: count });
+      } else {
+        await client.models.Valve.create({ valve: valveType, number: count });
+      }
+    }
+
+    setTab("4");
+    alert('Compute complete.');
   }
 
   const onClick = useCallback((e: MapMouseEvent) => {
@@ -878,8 +863,8 @@ function App() {
         <Button onClick={handleCal} backgroundColor={"lightyellow"} color={"darkblue"}>
           QC
         </Button>
-        <Button onClick={handleTrackCal} backgroundColor={"lightgreen"} color={"darkgreen"}>
-          Track Cal
+        <Button onClick={handleCompute} backgroundColor={"lightgreen"} color={"darkgreen"}>
+          Compute
         </Button>
         {calResult !== null && (
           <span style={{ alignSelf: "center", fontWeight: "bold" }}>
@@ -942,12 +927,13 @@ function App() {
         <select
           value={joint}
           onChange={e => setJoint(e.target.value)}
+          style={{ minWidth: '120px' }}
         >
-          <option value="joint">Joint</option>
-          <option value="#0-6 24 in 90-bend">90-Bend</option>
-          <option value="#0-6 24 in 45-bend">45-Bend</option>
-          <option value="#0-6 24 in 22.5-bend">22.5-Bend</option>
-          <option value="11.25-bend">11.25-Bend</option>
+          <option value="joint">joint</option>
+          <option value="#0-6 24 in 90-bend">#0-6 24 in 90-bend</option>
+          <option value="#0-6 24 in 45-bend">#0-6 24 in 45-bend</option>
+          <option value="#0-6 24 in 22.5-bend">#0-6 24 in 22.5-bend</option>
+          <option value="#0-6 24 in 11.25-bend">#0-6 24 in 11.25-bend</option>
         </select>
         <label style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', cursor: 'pointer' }}>
           <input
@@ -1191,14 +1177,11 @@ function App() {
                                   onChange={e => setEditJoint(e.target.value)}
                                   style={{ fontSize: '11px', padding: '2px 4px' }}
                                 >
-                                  <option value="joint">Joint</option>
-                                  <option value="90-bend">90-Bend</option>
-                                  <option value="45-bend">45-Bend</option>
-                                  <option value="22.5-bend">22.5-Bend</option>
-                                  <option value="11.25-bend">11.25-Bend</option>
-                                  <option value="24-plug-valve">24-Plug Valve</option>
-                                  <option value="30-plug-valve">30-Plug Valve</option>
-                                  <option value="30-line-stop">30 Line Stop</option>
+                                  <option value="joint">joint</option>
+                                  <option value="#0-6 24 in 90-bend">#0-6 24 in 90-bend</option>
+                                  <option value="#0-6 24 in 45-bend">#0-6 24 in 45-bend</option>
+                                  <option value="#0-6 24 in 22.5-bend">#0-6 24 in 22.5-bend</option>
+                                  <option value="#0-6 24 in 11.25-bend">#0-6 24 in 11.25-bend</option>
                                 </select>
                               </td>
                             </tr>
