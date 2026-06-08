@@ -352,11 +352,14 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!client.models.Valve) return;
+    if (!client.models.Valve) {
+      console.warn('Valve model not available — redeploy sandbox to apply schema changes.');
+      return;
+    }
     const sub = client.models.Valve.observeQuery({
       selectionSet: [...valveSelectionSet],
     }).subscribe({
-      next: (data) => setValveList([...data.items]),
+      next: (data) => { console.log('Valve items:', data.items); setValveList([...data.items]); },
       error: (err) => console.error('Valve observeQuery error:', err),
     });
     return () => sub.unsubscribe();
