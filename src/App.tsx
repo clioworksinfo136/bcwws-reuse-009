@@ -81,7 +81,7 @@ type LocationItem = SelectionSet<Schema['Location']['type'], typeof locationSele
 const dateSelectionSet = [
   'id', 'date', 'weather', 'hight', 'lowt', 'supervisor',
   'labor', 'observation', 'remark', 'comment', 'equipment',
-  'locationId', 'createdAt', 'updatedAt',
+  'createdAt', 'updatedAt',
 ] as const;
 type DateItem = SelectionSet<Schema['Date']['type'], typeof dateSelectionSet>;
 
