@@ -26,7 +26,10 @@ const schema = a.schema({
       photos: a.string().array(),
       comments: a.ref('Comment').array(),
       joint: a.string(),
-      dates: a.hasMany('Date', 'locationId'),
+      dateId: a.id(),
+      date_record: a.belongsTo('Date', 'dateId'),
+      trackId: a.id(),
+      track_record: a.belongsTo('Track', 'trackId'),
     })
     .authorization((allow) => [allow.publicApiKey()]),
   Track: a
@@ -41,6 +44,7 @@ const schema = a.schema({
       numpoint: a.integer(),
       trip: a.boolean(),
       cost: a.boolean(),
+      locations: a.hasMany('Location', 'trackId'),
     })
     .authorization((allow) => [allow.publicApiKey()]),
   Date: a
@@ -55,8 +59,7 @@ const schema = a.schema({
       remark: a.string(),
       comment: a.string(),
       equipment: a.string(),
-      locationId: a.id(),
-      location: a.belongsTo('Location', 'locationId'),
+      locations: a.hasMany('Location', 'dateId'),
     })
     .authorization((allow) => [allow.publicApiKey()]),
 });

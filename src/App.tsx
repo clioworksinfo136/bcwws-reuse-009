@@ -67,7 +67,7 @@ import {
 
 //import type { WaterFeatureProperties } from './types';
 import './FeaturePopup.css';
-const MAPBOX_TOKEN ="pk.eyJ1IjoicWlhb3hpbjEzNiIsImEiOiJjbGU1eXcyYTMwaHRyM29tc2dncjR6ZTBhIn0.8Wa3AEGbUSnau7PCEV3Stg" ;
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
 
 const client = generateClient<Schema>();
 

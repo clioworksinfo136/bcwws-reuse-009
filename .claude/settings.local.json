@@ -9,7 +9,9 @@
       "Bash(Get-ChildItem -Path \"C:\\\\temp\\\\bcwws-reuse-002\\\\amplify\" -Recurse -ErrorAction SilentlyContinue)",
       "Bash(Select-Object FullName)",
       "Bash(find C:\\\\\\\\temp\\\\\\\\bcwws-reuse-002\\\\\\\\amplify -type f -name \"*.ts\" -o -name \"*.graphql\" -o -name \"*.json\")",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(Move-Item \"C:\\\\temp\\\\bcwws-reuse-007\\\\src\\\\.env\" \"C:\\\\temp\\\\bcwws-reuse-007\\\\.env\")",
+      "PowerShell(Move-Item \"C:\\\\temp\\\\bcwws-reuse-007\\\\src\\\\.env\" \"C:\\\\temp\\\\bcwws-reuse-007\\\\.env\")"
     ]
   }
 }
