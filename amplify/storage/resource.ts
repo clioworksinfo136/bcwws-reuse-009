@@ -12,5 +12,9 @@ export const imagesStorage = defineStorage({
       allow.authenticated.to(['write', 'read', 'delete']),
       allow.guest.to(['read'])
     ],
+    'geojson/*': [
+      allow.authenticated.to(['write', 'read', 'delete']),
+      allow.guest.to(['read'])
+    ],
   })
 })

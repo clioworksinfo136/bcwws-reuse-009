@@ -764,6 +764,86 @@ function App() {
   }
 
 
+  async function handleCompletePolygon() {
+    try {
+      flushSync(() => setComputeStatus("Complete Polygon: processing..."));
+      const LAT_FT = 364000;
+      const features = [];
+
+      const polygonTracks = trackInfoList.filter(t => t.geometry === 'polygon');
+      flushSync(() => setComputeStatus(`Complete Polygon: found ${polygonTracks.length} polygon track(s)...`));
+
+      for (const trackRec of polygonTracks) {
+        const pts = location
+          .filter(l => l.track === trackRec.track)
+          .sort((a, b) => {
+            const da = `${a.date ?? ''}T${a.time ?? ''}`;
+            const db = `${b.date ?? ''}T${b.time ?? ''}`;
+            return da.localeCompare(db);
+          });
+
+        if (pts.length < 3) {
+          console.log(`Track ${trackRec.track}: skipped (only ${pts.length} point(s))`);
+          continue;
+        }
+
+        // Calculate area using Shoelace formula
+        const n = pts.length;
+        const midLat = pts.reduce((s, p) => s + (p.lat ?? 0), 0) / n;
+        const LNG_FT = LAT_FT * Math.cos((midLat * Math.PI) / 180);
+        let area = 0;
+        for (let i = 0; i < n; i++) {
+          const j = (i + 1) % n;
+          area += (pts[i].lng ?? 0) * LNG_FT * (pts[j].lat ?? 0) * LAT_FT
+                - (pts[j].lng ?? 0) * LNG_FT * (pts[i].lat ?? 0) * LAT_FT;
+        }
+        const sqFt = Math.round(Math.abs(area) / 2 * 100) / 100;
+        const sqYd = Math.round(sqFt / 9 * 100) / 100;
+
+        const coords = pts.map(p => [p.lng ?? 0, p.lat ?? 0]);
+        coords.push(coords[0]);
+
+        features.push({
+          type: 'Feature' as const,
+          geometry: { type: 'Polygon' as const, coordinates: [coords] },
+          properties: {
+            id:        trackRec.id,
+            track:     trackRec.track,
+            geometry:  trackRec.geometry,
+            ft2:       sqFt,
+            yd2:       sqYd,
+            unitprice: trackRec.unitprice,
+            quan:      trackRec.quan,
+            value:     trackRec.value,
+            numpoint:  n,
+            unit:      trackRec.unit,
+            lastdate:  trackRec.lastdate,
+            color:     trackRec.color,
+            cost:      trackRec.cost,
+          },
+        });
+      }
+
+      if (features.length === 0) {
+        setComputeStatus("Complete Polygon: no polygon tracks with 3+ points found.");
+        return;
+      }
+
+      flushSync(() => setComputeStatus(`Complete Polygon: uploading ${features.length} polygon(s)...`));
+      const geojson = { type: 'FeatureCollection' as const, features };
+      const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/json' });
+      await uploadData({
+        path: 'geojson/polygon.geojson',
+        data: blob,
+        options: { contentType: 'application/json' },
+      }).result;
+      setComputeStatus(`✓ Saved ${features.length} polygon(s) to Amplify Storage as geojson/polygon.geojson.`);
+    } catch (err) {
+      console.error('handleCompletePolygon error:', err);
+      setComputeStatus(`✗ Complete Polygon failed: ${String(err)}`);
+    }
+  }
+
   async function handleCompute() {
     const LAT_FT = 364000;
     const sorted = [...trackInfoList].sort((a, b) => (a.track ?? 0) - (b.track ?? 0));
@@ -957,6 +1037,9 @@ function App() {
         </Button>
         <Button onClick={handleCompute} backgroundColor={"lightgreen"} color={"darkgreen"}>
           Compute
+        </Button>
+        <Button onClick={handleCompletePolygon} backgroundColor={"steelblue"} color={"white"}>
+          Complete Polygon
         </Button>
         {computeStatus && (
           <span style={{ alignSelf: "center", fontWeight: "bold", color: computeStatus.startsWith("✓") ? "darkgreen" : "darkorange" }}>
