@@ -198,6 +198,7 @@ function App() {
   const [pdfMode, setPdfMode] = useState(false);
   const [calResult, setCalResult] = useState<number | null>(null);
   const [computeStatus, setComputeStatus] = useState<string>("");
+  const [showAdminTabs, setShowAdminTabs] = useState<boolean>(false);
 
   //const [clickInfo, setClickInfo] = useState<DataT>();
   //const [showPopup, setShowPopup] = useState<boolean>(true);
@@ -234,6 +235,25 @@ function App() {
 
   const [trackInfoList, setTrackInfoList] = useState<TrackInfoItem[]>([]);
   const [valveList, setValveList] = useState<ValveItem[]>([]);
+
+  const trackColorMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    for (const t of trackInfoList) {
+      if (t.track != null && t.color) map[t.track] = t.color;
+    }
+    return map;
+  }, [trackInfoList]);
+
+  const coloredLocationGeoJSON = useMemo(() => ({
+    ...locationGeoJSON,
+    features: locationGeoJSON.features.map(f => ({
+      ...f,
+      properties: {
+        ...f.properties,
+        color: f.properties.track != null ? (trackColorMap[f.properties.track] ?? '#2b6cb0') : '#2b6cb0',
+      },
+    })),
+  }), [locationGeoJSON, trackColorMap]);
   const [editingValveId, setEditingValveId] = useState<string | null>(null);
   const [editValveFields, setEditValveFields] = useState({
     number: "" as number | "", unitprice: "" as number | "", ton: "" as number | "",
@@ -743,6 +763,66 @@ function App() {
     setCalResult(haversineDistanceFt(lat, lng, latest.lat, latest.lng));
   }
 
+  async function handleExportPolygon() {
+    // Fetch all tracks and locations fresh from backend
+    const { data: allTracks } = await client.models.Track.list();
+    const { data: allLocations } = await client.models.Location.list();
+
+    const polygonTracks = (allTracks ?? []).filter(t => t.geometry === 'polygon');
+
+    const features = polygonTracks.map(trackRec => {
+      const pts = (allLocations ?? [])
+        .filter(l => l.track === trackRec.track)
+        .sort((a, b) => {
+          const da = `${a.date ?? ''}T${a.time ?? ''}`;
+          const db = `${b.date ?? ''}T${b.time ?? ''}`;
+          return da.localeCompare(db);
+        });
+
+      // GeoJSON polygon requires first and last point to be the same (closed ring)
+      const coords = pts.map(p => [p.lng ?? 0, p.lat ?? 0]);
+      if (coords.length > 0) coords.push(coords[0]);
+
+      return {
+        type: 'Feature' as const,
+        geometry: {
+          type: 'Polygon' as const,
+          coordinates: [coords],
+        },
+        properties: {
+          id:        trackRec.id,
+          track:     trackRec.track,
+          geometry:  trackRec.geometry,
+          ft2:       trackRec.ft2,
+          yd2:       trackRec.yd2,
+          unitprice: trackRec.unitprice,
+          quan:      trackRec.quan,
+          value:     trackRec.value,
+          numpoint:  trackRec.numpoint,
+          trip:      trackRec.trip,
+          cost:      trackRec.cost,
+          unit:      trackRec.unit,
+          lastdate:  trackRec.lastdate,
+          color:     trackRec.color,
+        },
+      };
+    });
+
+    const geojson = {
+      type: 'FeatureCollection' as const,
+      features,
+    };
+
+    const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/json' });
+    await uploadData({
+      path: 'polygon.geojson',
+      data: blob,
+      options: { contentType: 'application/json' },
+    }).result;
+
+    alert(`✓ Exported ${features.length} polygon(s) to polygon.geojson in Amplify Storage.`);
+  }
+
   async function handleCompute() {
     const LAT_FT = 364000;
     const sorted = [...trackInfoList].sort((a, b) => (a.track ?? 0) - (b.track ?? 0));
@@ -933,6 +1013,12 @@ function App() {
         <Button onClick={handleCompute} backgroundColor={"lightgreen"} color={"darkgreen"}>
           Compute
         </Button>
+        <Button onClick={() => setShowAdminTabs(v => !v)} backgroundColor={showAdminTabs ? "#555" : "#888"} color={"white"}>
+          {showAdminTabs ? "▲ Tab" : "▼ Tab"}
+        </Button>
+        <Button onClick={handleExportPolygon} backgroundColor={"steelblue"} color={"white"}>
+          Complete Polygon
+        </Button>
         {computeStatus && (
           <span style={{ alignSelf: "center", fontWeight: "bold", color: computeStatus.startsWith("✓") ? "darkgreen" : "darkorange" }}>
             {computeStatus}
@@ -1024,8 +1110,8 @@ function App() {
         value={tab}
         onValueChange={(tab) => setTab(tab)}
         items={[
-          {
-            label: "History Map",
+          ...[{
+            label: "Progress Map",
             value: "1",
             content: (<>
               <Map
@@ -1049,7 +1135,7 @@ function App() {
                 onMouseLeave={onMouseLeave}
                 cursor={cursor}
               >
-                <Source id="water-data" type="geojson" data={locationGeoJSON}>
+                <Source id="water-data" type="geojson" data={coloredLocationGeoJSON}>
 
                   <Layer
                     id='water-points'
@@ -1064,15 +1150,7 @@ function App() {
                         3.5,
                         3.5
                       ],
-                      'circle-color': [
-                        'match',
-                        ['get', 'type'],
-                        'reuse', '#b12bbd',
-                        'water', '#2b6cb0',
-                        "wastewater", '#2ea160',
-                        "stormwater", '#eca4a4',
-                        "pavement", '#a0a0a0',  '#2b6cb0'
-                      ]/* '#2b6cb0' */,
+                      'circle-color': ['coalesce', ['get', 'color'], '#2b6cb0'],
                       'circle-stroke-color': '#ffffff',
                       'circle-stroke-width': 2,
                       'circle-opacity': 0.9,
@@ -1367,8 +1445,8 @@ function App() {
                 </div>
               </Map>
             </>)
-          },
-          {
+          }],
+          ...(showAdminTabs ? [{
             label: "History Data",
             value: "2",
             content: (<>
@@ -1442,14 +1520,14 @@ function App() {
                 </ThemeProvider>
               </ScrollView>
             </>)
-          },
+          }] : []),
           {
-            label: "Date Info",
+            label: "Report Input",
             value: "3",
             content: (<>
               <ScrollView
                 as="div"
-                ariaLabel="Date Info"
+                ariaLabel="Report Input"
                 backgroundColor="var(--amplify-colors-white)"
                 borderRadius="6px"
                 color="var(--amplify-colors-blue-60)"
@@ -1654,7 +1732,7 @@ function App() {
               </ScrollView>
             </>)
           },
-          {
+          ...(showAdminTabs ? [{
             label: "Track Info",
             value: "4",
             content: (<>
@@ -1829,8 +1907,7 @@ function App() {
                 </ThemeProvider>
               </ScrollView>
             </>)
-          },
-          {
+          }, {
             label: "Valve Info",
             value: "5",
             content: (<>
@@ -1910,7 +1987,7 @@ function App() {
                 </ThemeProvider>
               </ScrollView>
             </>)
-          },
+          }] : []),
         ]}
       />
 
