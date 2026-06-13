@@ -981,6 +981,43 @@ function App() {
     }
   }
 
+  async function handleExportPoint() {
+    try {
+      flushSync(() => setComputeStatus(["Export Point: exporting point tracks to point.geojson..."]));
+      // For each Location, look up the linked Track by matching type; keep only point-geometry tracks.
+      const trackByType: Record<string, typeof trackInfoList[number]> = {};
+      for (const t of trackInfoList) {
+        if (t.type) trackByType[t.type] = t;
+      }
+      const pointFeatures = location
+        .filter(l => l.lat != null && l.lng != null && l.type != null)
+        .map(l => ({ l, track: trackByType[l.type!] }))
+        .filter(({ track }) => track?.geometry === 'point')
+        .map(({ l, track }) => ({
+          type: 'Feature' as const,
+          geometry: { type: 'Point' as const, coordinates: [l.lng!, l.lat!] },
+          properties: {
+            track:     track!.track,
+            typeid:    track!.typeid,
+            type:      track!.type,
+            unit:      track!.unit,
+            unitprice: track!.unitprice,
+          },
+        }));
+      const pointGeojson = { type: 'FeatureCollection' as const, features: pointFeatures };
+      await uploadData({
+        path: 'geojson/point.geojson',
+        data: new Blob([JSON.stringify(pointGeojson, null, 2)], { type: 'application/json' }),
+        options: { contentType: 'application/json' },
+      }).result;
+      setComputeStatus(prev => [...prev, `✓ Saved ${pointFeatures.length} point(s) to Amplify Storage as geojson/point.geojson.`]);
+      setTimeout(() => setComputeStatus([]), 2000);
+    } catch (err) {
+      console.error('handleExportPoint error:', err);
+      setComputeStatus(prev => [...prev, `✗ Export Point failed: ${String(err)}`]);
+    }
+  }
+
   async function handleCompute() {
     const LAT_FT = 364000;
     const sorted = [...trackInfoList].sort((a, b) => (a.track ?? 0) - (b.track ?? 0));
@@ -1220,6 +1257,9 @@ function App() {
         </Button>
         <Button onClick={handleCompletePolygon} backgroundColor={"steelblue"} color={"white"}>
           Complete Polygon
+        </Button>
+        <Button onClick={handleExportPoint} backgroundColor={"#6b46c1"} color={"white"}>
+          Export Point
         </Button>
         {computeStatus.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", fontWeight: "bold" }}>
@@ -2035,7 +2075,7 @@ function App() {
                 borderRadius="6px"
                 color="var(--amplify-colors-blue-60)"
                 padding="1rem"
-                height="75vh"
+                height="calc(100vh - 320px)"
                 style={{ overflowY: 'auto' }}
               >
                 <ThemeProvider theme={theme} colorMode="light">
