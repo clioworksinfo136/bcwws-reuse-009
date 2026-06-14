@@ -198,7 +198,7 @@ function App() {
   const [basemap, setBasemap] = useState("mapbox://styles/mapbox/streets-v12");
   const [pdfMode, setPdfMode] = useState(false);
   const [calResult, setCalResult] = useState<number | null>(null);
-  const [computeStatus, setComputeStatus] = useState<string[]>([]);
+  const [, setComputeStatus] = useState<string[]>([]);
   const [showAdminTabs, setShowAdminTabs] = useState<boolean>(false);
 
   //const [clickInfo, setClickInfo] = useState<DataT>();
