@@ -33,7 +33,7 @@ color:  'red', unit: "Cubic Yard" },
   { typeid1: '#0-15', typeid:'#0-15',type: 'Minor Utility Adjustment', geometry: 'point', unitprice: 2708.00, totalprice: 81240.00,color: 'red', unit: "EA" },
   { typeid1: '#0-16', typeid:'#0-16',type: 'Major Utility Adjustment', geometry: 'point', unitprice:5417.00, totalprice:81255.00,color:'red',unit:"EA" },
   { typeid1:'#0-17',typeid:'#0-17',type:'Stabilized Subgrade A',geometry:'line',unitprice:15.00,totalprice:216000.00, color:'grey',unit:"SY" },
-  { typeid1:'#0-18',typeid:'#0-18',type:'Limerock Base',geometry:'polygon',unitprice:48.75,totalprice:737100.00,color:'grey',unit:"SY" },
+  { typeid1:'#0-18',typeid:'#0-18',type:'Limerock Base A',geometry:'line',unitprice:48.75,totalprice:737100.00,color:'grey',unit:"SY" },
    {typeid1: '#0-19', typeid:'#0-19',type: 'Asphalt Pavement Restoration A', geometry: 'line', unitprice: 31.00,totalprice:492156.00, color: 'grey', unit: "SY" },
   { typeid1: '#0-20', typeid:'#0-20',type: 'Mill and Resurface Asphalt Pavement A', geometry: 'line', unitprice: 19.00, totalprice: 934800.00, color: 'grey', unit: "SY" },
   { typeid1: '#0-21', typeid:'#0-21',type: "Pavement Marking & Striping", geometry: 'line', unitprice: 168750.00, totalprice:168750.00,color: 'black', unit: "LS" },
@@ -64,7 +64,8 @@ color:  'red', unit: "Cubic Yard" },
   { typeid1: '#0-46', typeid:'#0-46',type: '30 inch Ductile Iron Pipe, Class 250 (Bid Alternate to Base Bid 0-5)', geometry:'line',unitprice:658.0,totalprice:5922.00,color:'purple',unit:"FT"},
   {typeid1: '#0-47', typeid:'#0-47',type: 'Asphalt Pavement Restoration B', geometry: 'polygon', unitprice: 31.00,totalprice:492156.00, color: 'grey', unit: "SY" },
   { typeid1: '#0-48', typeid:'#0-48',type: 'Mill and Resurface Asphalt Pavement B', geometry: 'polygon', unitprice: 19.00, totalprice: 934800.00, color: 'grey', unit: "SY" },
-  { typeid1:'#0-49',typeid:'#0-49',type:'Stabilized Subgrade B',geometry:'polygon',unitprice:15.00,totalprice:216000.00, color:'grey',unit:"SY" }
+  { typeid1:'#0-49',typeid:'#0-49',type:'Stabilized Subgrade B',geometry:'polygon',unitprice:15.00,totalprice:216000.00, color:'grey',unit:"SY" },
+  { typeid1:'#0-50',typeid:'#0-50',type:'Limerock Base B',geometry:'polygon',unitprice:48.75,totalprice:737100.00,color:'grey',unit:"SY" }
 ];
 
 export const TRACK_TYPES = TRACK_DATA.map(r => r.type);
