@@ -198,7 +198,7 @@ function App() {
   const [basemap, setBasemap] = useState("mapbox://styles/mapbox/streets-v12");
   const [pdfMode, setPdfMode] = useState(false);
   const [calResult, setCalResult] = useState<number | null>(null);
-  const [, setComputeStatus] = useState<string[]>([]);
+  const [computeStatus, setComputeStatus] = useState<string[]>([]);
   const [showAdminTabs, setShowAdminTabs] = useState<boolean>(false);
 
   //const [clickInfo, setClickInfo] = useState<DataT>();
@@ -1015,7 +1015,7 @@ function App() {
       await client.models.Track.update({
         id: trackId,
         trip: true,
-        ...(trackRecByNumber[trackNo]?.width === 0 && { width: 1 }),
+        ...((trackRecByNumber[trackNo]?.width ?? 0) === 0 && { width: 1 }),
         ...(match?.unitprice != null && { unitprice: match.unitprice }),
         ...(match?.totalprice != null && { totalprice: match.totalprice }),
         ...(match?.geometry  != null && { geometry:  match.geometry  }),
@@ -1233,6 +1233,22 @@ function App() {
           {showAdminTabs ? "▲ Tab" : "▼ Tab"}
         </Button>
       </Flex>
+      {computeStatus.length > 0 && (
+        <div style={{
+          margin: "8px 0",
+          padding: "10px 14px",
+          backgroundColor: "#f0fff4",
+          border: "1px solid #9ae6b4",
+          borderRadius: "6px",
+          fontFamily: "monospace",
+          fontSize: "13px",
+          color: "#22543d",
+        }}>
+          {computeStatus.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+        </div>
+      )}
       <br />
       <Flex direction="row">
 
