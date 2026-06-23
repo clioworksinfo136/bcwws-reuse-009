@@ -1006,16 +1006,22 @@ function App() {
       const firstType = pts.find(p => p.type)?.type;
       const match = firstType ? TRACK_DATA.find(r => r.type === firstType) : undefined;
       let trackId = trackIdByNumber[trackNo];
+      const created = !trackId;
       if (!trackId) {
-        const { data: created } = await client.models.Track.create({ track: trackNo, cost: true });
-        if (!created) continue;
-        trackId = created.id;
+        const { data: createdRec } = await client.models.Track.create({ track: trackNo, cost: true });
+        if (!createdRec) {
+          flushSync(() => setComputeStatus(prev => [...prev, `  • Track ${trackNo}: create failed, skipped`]));
+          continue;
+        }
+        trackId = createdRec.id;
         trackIdByNumber[trackNo] = trackId;
       }
+      const widthSet = (trackRecByNumber[trackNo]?.width ?? 0) === 0;
       await client.models.Track.update({
         id: trackId,
         trip: true,
-        ...((trackRecByNumber[trackNo]?.width ?? 0) === 0 && { width: 1 }),
+        ...(widthSet && { width: 1 }),
+        ...(match?.id != null && { trackid: match.id }),
         ...(match?.unitprice != null && { unitprice: match.unitprice }),
         ...(match?.totalprice != null && { totalprice: match.totalprice }),
         ...(match?.geometry  != null && { geometry:  match.geometry  }),
@@ -1025,7 +1031,15 @@ function App() {
         ...(match?.typeid1   != null && { typeid1:   match.typeid1   }),
         ...(match?.typeid    != null && { typeid:    match.typeid    }),
       });
+      const detail = match
+        ? `type "${firstType}" → trackid=${match.id ?? '—'}, geometry=${match.geometry}, unitprice=${match.unitprice ?? '—'}, unit=${match.unit ?? '—'}`
+        : firstType
+          ? `type "${firstType}" (no trackData match — values unchanged)`
+          : `no point type found — values unchanged`;
+      flushSync(() => setComputeStatus(prev => [...prev,
+        `  • Track ${trackNo} (${pts.length} pt${pts.length === 1 ? '' : 's'}, ${created ? 'created' : 'existing'}): ${detail}${widthSet ? ', width set to 1' : ''}`]));
     }
+    flushSync(() => setComputeStatus(prev => [...prev, `Pass 0 done — processed ${locationTrackNumbers.length} track(s).`]));
 
     // Remove Track records whose track number no longer exists in Location
     flushSync(() => setComputeStatus(prev => [...prev, "Removing Track rows with no matching Location..."]));
@@ -1244,6 +1258,14 @@ function App() {
           fontSize: "13px",
           color: "#22543d",
         }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px" }}>
+            <button
+              onClick={() => setComputeStatus([])}
+              style={{ backgroundColor: "#2f855a", color: "white", border: "none", borderRadius: "4px", padding: "2px 10px", cursor: "pointer", fontSize: "12px" }}
+            >
+              Clear
+            </button>
+          </div>
           {computeStatus.map((line, i) => (
             <div key={i}>{line}</div>
           ))}
