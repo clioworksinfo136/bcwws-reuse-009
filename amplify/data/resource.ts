@@ -23,6 +23,7 @@ const schema = a.schema({
       lng: a.float().required(),
       username: a.string(),
       description: a.string(),
+      width: a.float(),
       photos: a.string().array(),
       comments: a.ref('Comment').array(),
       joint: a.string(),
