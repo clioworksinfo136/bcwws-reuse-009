@@ -1156,12 +1156,17 @@ function App() {
 
       if (trackRec.geometry === 'line') {
         const sumLength = pts.reduce((s, p) => s + (p.length ?? 0), 0);
-        const total = Math.round(sumLength * (trackRec.width ?? 1) * 100) / 100;
+        const w = trackRec.width ?? 1;
+        const total = Math.round(sumLength * w / 9 * 100) / 100;
         await client.models.Track.update({ id: trackRec.id, quan: total });
+        flushSync(() => setComputeStatus(prev => [...prev,
+          `  • Track ${trackRec.track} (line): quan = Σlength × width / 9 = ${Math.round(sumLength * 100) / 100} × ${w} / 9 = ${total}`]));
 
       } else if (trackRec.geometry === 'point') {
         const n = pts.length;
         await client.models.Track.update({ id: trackRec.id, quan: n, numpoint: n });
+        flushSync(() => setComputeStatus(prev => [...prev,
+          `  • Track ${trackRec.track} (point): quan = point count = ${n}`]));
 
       } else if (trackRec.geometry === 'polygon') {
         // Sort by date+time so points are in field-collection order (required for Shoelace)
@@ -1173,6 +1178,8 @@ function App() {
         const n = orderedPts.length;
         if (n < 3) {
           await client.models.Track.update({ id: trackRec.id, numpoint: n, ft2: 0, yd2: 0, quan: 0 });
+          flushSync(() => setComputeStatus(prev => [...prev,
+            `  • Track ${trackRec.track} (polygon): only ${n} pt(s) — need ≥3, quan = 0`]));
           continue;
         }
         const midLat = orderedPts.reduce((s, p) => s + (p.lat ?? 0), 0) / n;
@@ -1188,6 +1195,8 @@ function App() {
         const unit = trackRec.unit ?? '';
         const quan = unit === 'SF' ? sqFt : sqYd;
         await client.models.Track.update({ id: trackRec.id, numpoint: n, ft2: sqFt, yd2: sqYd, quan });
+        flushSync(() => setComputeStatus(prev => [...prev,
+          `  • Track ${trackRec.track} (polygon): area = ${sqFt} SF / ${sqYd} SY (${n} pts), quan = ${quan} (${unit || 'SY'})`]));
       }
     }
 
